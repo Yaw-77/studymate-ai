@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: studymate-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-studymate}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-studymate123}
+      POSTGRES_DB: ${DB_NAME:-studymate}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: studymate-backend
+    env_file:
+      - .env
+    environment:
+      # Inside the compose network the backend is reachable by service name
+      DATABASE_URL: postgresql://${DB_USER:-studymate}:${DB_PASSWORD:-studymate123}@db:5432/${DB_NAME:-studymate}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      # Development: mount source code for hot reload.
+      # For production, remove this volume mount and use a separate docker-compose.prod.yml
+      - ./backend:/app
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Baked in at build time by Vite. Left empty so axios falls back to the
+        # same origin and nginx proxies /api to the backend (see nginx.conf).
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    container_name: studymate-frontend
+    ports:
+      # nginx serves the built app on port 80 inside the container
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
