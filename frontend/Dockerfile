@@ -3,7 +3,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 # Vite inlines VITE_* vars at build time, so it must be an ARG before `npm run build`
